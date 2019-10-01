@@ -8,13 +8,15 @@ from sklearn.decomposition.pca import PCA
 from elasticsearch import Elasticsearch
 from time import time
 import itertools
-import cPickle as pickle
+import pickle
 import glob
 import requests
 import cv2
 import os
 import errno
 from multiprocessing import Pool
+import tqdm
+
 
 # Import ORB as SIFT to avoid confusion.
 try:
@@ -128,7 +130,7 @@ def store_descriptors_csv(descriptors, surf_path='images/surf'):
 def load_surf_data(surf_path='images/surf'):
     file_path = os.path.join(surf_path, "artwork_surf.p")
     if os.path.exists(file_path):
-        return pickle.load(open(file_path, "rb"))
+        return pickle.load(open(file_path, "rb"), encoding='latin1')
     else:
         return []
 
@@ -147,7 +149,7 @@ def store_surf_model(model, model_path="images/surf/model.sav"):
 
 
 def load_surf_model(model_path="images/surf/model.sav"):
-    return pickle.load(open(model_path, 'rb'))
+    return pickle.load(open(model_path, 'rb'), encoding='latin1')
 
 
 def pickle_keypoints(file_id, keypoints, descriptors):
@@ -177,11 +179,11 @@ def unpickle_keypoints(array):
 def index_source_image(es, file_id, terms):
     # by default we connect to localhost:9200
     es.indices.create(index='comp-photo-idx', ignore=400)
-    es.index(index="comp-photo-idx", doc_type="artwork", id=file_id, body={"tags": list(set(terms))})
+    es.index(index="comp-photo-idx", id=file_id, body={"tags": list(set(terms))})
 
 
 def query_source_images(es, terms):
-    return es.search(index="comp-photo-idx", doc_type="artwork",
+    return es.search(index="comp-photo-idx",
                      body={"query": {"terms": {"tags": list(set(terms))}}})
 
 
@@ -214,7 +216,7 @@ print("Loaded model and initializing ElasticSearch")
 
 # Had to bump up the ElasticSearch max clause count to the following. index.query.bool.max_clause_count: 4096
 es = Elasticsearch()
-for file_id, _, descs in data:
+for file_id, _, descs in tqdm.tqdm(data):
     index_source_image(es, file_id, [int(i) for i in model.predict(descs)])
 
 print("ElasticSearch initialized with source image data and model terms.")
